@@ -9,15 +9,11 @@ DIST_DIR = BASE_DIR / "../frontend/dist"
 
 app = FastAPI()
 
+app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
+
 @app.get("/ping")
 def ping():
     return {"status": "ok"}
-
-app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
-
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    return FileResponse(DIST_DIR / "index.html")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -30,3 +26,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_text(f"Message received: {data}")
     except Exception as e:
         print(f"Connection closed: {e}")
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    return FileResponse(DIST_DIR / "index.html")
