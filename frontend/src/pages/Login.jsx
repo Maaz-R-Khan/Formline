@@ -1,12 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from 'firebase/auth'
+import { auth } from '../firebase'
 import './Login.css'
+
+const googleProvider = new GoogleAuthProvider()
 
 export default function Login() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('signin')
   const [showPw, setShowPw] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [submitLabel, setSubmitLabel] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     document.body.classList.add('login-page')
@@ -14,14 +26,51 @@ export default function Login() {
   }, [])
 
   const isSignup = tab === 'signup'
-
   const baseSubmitText = isSignup ? 'Create your account' : 'Step into the gym'
   const buttonText = submitLabel ?? baseSubmitText
 
-  const handleSubmit = (e) => {
+  const handleError = (err) => {
+    setSubmitLabel(null)
+    const map = {
+      'auth/invalid-email': 'Invalid email address.',
+      'auth/user-not-found': 'No account found with that email.',
+      'auth/wrong-password': 'Incorrect password.',
+      'auth/email-already-in-use': 'An account with this email already exists.',
+      'auth/weak-password': 'Password must be at least 6 characters.',
+      'auth/invalid-credential': 'Email or password is incorrect.',
+    }
+    setError(map[err.code] ?? 'Something went wrong. Please try again.')
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!email || !password) {
+      setError('Please enter your email and password.')
+      return
+    }
+    setError(null)
     setSubmitLabel('Warming up…')
-    setTimeout(() => navigate('/dashboard'), 700)
+    try {
+      if (isSignup) {
+        await createUserWithEmailAndPassword(auth, email, password)
+      } else {
+        await signInWithEmailAndPassword(auth, email, password)
+      }
+      navigate('/dashboard')
+    } catch (err) {
+      console.error('Auth error:', err.code, err.message)
+      handleError(err)
+    }
+  }
+
+  const handleGoogle = async () => {
+    setError(null)
+    try {
+      await signInWithPopup(auth, googleProvider)
+      navigate('/dashboard')
+    } catch (err) {
+      handleError(err)
+    }
   }
 
   return (
@@ -52,7 +101,7 @@ export default function Login() {
 
         <section className="form-panel">
           <div className="form-top">
-            <a href="#" onClick={(e) => { e.preventDefault(); setTab('signup') }}>
+            <a href="#" onClick={(e) => { e.preventDefault(); setTab('signup'); setError(null) }}>
               <span>New to Formline?&nbsp;</span><strong>Create account →</strong>
             </a>
           </div>
@@ -72,21 +121,21 @@ export default function Login() {
               <button
                 type="button"
                 className={`tab ${!isSignup ? 'active' : ''}`}
-                onClick={() => setTab('signin')}
+                onClick={() => { setTab('signin'); setError(null) }}
               >
                 Sign in
               </button>
               <button
                 type="button"
                 className={`tab ${isSignup ? 'active' : ''}`}
-                onClick={() => setTab('signup')}
+                onClick={() => { setTab('signup'); setError(null) }}
               >
                 Create account
               </button>
             </div>
 
             <div className="socials">
-              <button className="social" type="button">
+              <button className="social" type="button" onClick={handleGoogle}>
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M21.6 12.23c0-.7-.06-1.36-.18-2H12v3.78h5.4a4.6 4.6 0 0 1-2 3v2.5h3.23c1.9-1.74 2.97-4.32 2.97-7.28Z" fill="#4285F4"/>
                   <path d="M12 22c2.7 0 4.96-.9 6.62-2.43l-3.22-2.5c-.9.6-2.04.96-3.4.96-2.6 0-4.82-1.76-5.6-4.13H3.07v2.6A10 10 0 0 0 12 22Z" fill="#34A853"/>
@@ -99,10 +148,23 @@ export default function Login() {
 
             <div className="divider">or with email</div>
 
+            {error && (
+              <p style={{ color: '#b94040', fontSize: 13, marginBottom: 12, fontFamily: 'var(--mono, monospace)', letterSpacing: '0.02em' }}>
+                {error}
+              </p>
+            )}
+
             <form onSubmit={handleSubmit} noValidate>
               <div className="field">
                 <label htmlFor="email">Email</label>
-                <input id="email" type="email" placeholder="you@email.com" autoComplete="email" />
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="you@email.com"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
               <div className="field">
                 <label htmlFor="password">Password</label>
@@ -112,6 +174,8 @@ export default function Login() {
                     type={showPw ? 'text' : 'password'}
                     placeholder="••••••••"
                     autoComplete={isSignup ? 'new-password' : 'current-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                   <button type="button" onClick={() => setShowPw((s) => !s)}>
                     {showPw ? 'Hide' : 'Show'}
